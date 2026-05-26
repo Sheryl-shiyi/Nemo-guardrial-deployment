@@ -1,0 +1,16 @@
+apiVersion: trustyai.opendatahub.io/v1alpha1
+kind: NemoGuardrails
+metadata:
+  name: nemo-guardrails
+  namespace: nemo-guardrails
+spec:
+  nemoConfigs:
+    - name: nemo-config
+      configMaps:
+        - nemo-config
+  env:
+    - name: "OPENAI_API_KEY"
+      valueFrom:
+        secretKeyRef:
+          name: "api-token-secret"
+          key: "token"

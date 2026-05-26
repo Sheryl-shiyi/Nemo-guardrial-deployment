@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nemo-guardrails-sa
+  namespace: nemo-guardrails
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: nemo-guardrails-sa-view
+  namespace: nemo-guardrails
+subjects:
+  - kind: ServiceAccount
+    name: nemo-guardrails-sa
+    namespace: nemo-guardrails
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view

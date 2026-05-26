@@ -1,0 +1,187 @@
+apiVersion: v1
+data:
+  config.yaml: |
+    version: 2
+    image_name: starter
+    apis:
+    - agents
+    - batches
+    - datasetio
+    - eval
+    - files
+    - inference
+    - post_training
+    - safety
+    - scoring
+    - tool_runtime
+    - vector_io
+    providers:
+      inference:
+      - provider_id: gemma-3-27b-bf16-distributed
+        provider_type: remote::vllm
+        config:
+          url: http://gemma-3-27b-bf16-distributed-predictor.vszp.svc.cluster.local:8080/v1
+          api_token: fake
+          max_tokens: 4096
+          tls_verify: false
+      - provider_id: qwen-3-4b-embedding
+        provider_type: remote::vllm
+        config:
+          url: http://qwen3-4b-embedding-predictor.vszp.svc.cluster.local:8080/v1
+          api_token: fake
+          max_tokens: 4096
+          tls_verify: false
+      - provider_id: sentence-transformers
+        provider_type: inline::sentence-transformers
+      vector_io:
+      - provider_id: pgvector
+        provider_type: remote::pgvector
+        config:
+          host: ${env.POSTGRES_HOST:=pgvector}
+          port: ${env.POSTGRES_PORT:=5432}
+          db: ${env.POSTGRES_DBNAME:=rag_blueprint}
+          user: ${env.POSTGRES_USER:=postgres}
+          password: ${env.POSTGRES_PASSWORD:=rag_password}
+          persistence:
+            backend: kv_default
+            namespace: vector_io::pgvector
+      files:
+      - provider_id: meta-reference-files
+        provider_type: inline::localfs
+        config:
+          storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/starter/files}
+          metadata_store:
+            table_name: files_metadata
+            backend: sql_default
+      safety:
+      - provider_id: llama-guard
+        provider_type: inline::llama-guard
+        config:
+          excluded_categories: []
+      agents:
+      - config:
+          persistence:
+            agent_state:
+              backend: kv_default
+              namespace: agents
+            responses:
+              backend: sql_default
+              max_write_queue_size: 10000
+              num_writers: 4
+              table_name: responses
+        provider_id: meta-reference
+        provider_type: inline::meta-reference
+      post_training:
+      - provider_id: torchtune-cpu
+        provider_type: inline::torchtune-cpu
+        config:
+          checkpoint_format: meta
+      eval:
+      - provider_id: meta-reference
+        provider_type: inline::meta-reference
+        config:
+          kvstore:
+            namespace: eval
+            backend: kv_default
+      datasetio:
+      - provider_id: huggingface
+        provider_type: remote::huggingface
+        config:
+          kvstore:
+            namespace: datasetio::huggingface
+            backend: kv_default
+      - provider_id: localfs
+        provider_type: inline::localfs
+        config:
+          kvstore:
+            namespace: datasetio::localfs
+            backend: kv_default
+      scoring:
+      - provider_id: basic
+        provider_type: inline::basic
+      - provider_id: llm-as-judge
+        provider_type: inline::llm-as-judge
+      - provider_id: braintrust
+        provider_type: inline::braintrust
+        config:
+          openai_api_key: ${env.OPENAI_API_KEY:=}
+      tool_runtime:
+      - provider_id: brave-search
+        provider_type: remote::brave-search
+        config:
+          api_key: ${env.BRAVE_SEARCH_API_KEY:=}
+          max_results: 3
+      - provider_id: tavily-search
+        provider_type: remote::tavily-search
+        config:
+          api_key: ${env.TAVILY_SEARCH_API_KEY:=}
+          max_results: 3
+      - provider_id: rag-runtime
+        provider_type: inline::rag-runtime
+      - provider_id: model-context-protocol
+        provider_type: remote::model-context-protocol
+      batches:
+      - provider_id: reference
+        provider_type: inline::reference
+        config:
+          kvstore:
+            namespace: batches
+            backend: kv_default
+    storage:
+      backends:
+        kv_default:
+          type: kv_sqlite
+          db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/kvstore.db
+        sql_default:
+          type: sql_sqlite
+          db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/sql_store.db
+      stores:
+        metadata:
+          namespace: registry
+          backend: kv_default
+        inference:
+          table_name: inference_store
+          backend: sql_default
+          max_write_queue_size: 10000
+          num_writers: 4
+        conversations:
+          table_name: openai_conversations
+          backend: sql_default
+    registered_resources:
+      models:
+      - metadata: {}
+        model_id: Gemma-3-27B-BF16-Distributed
+        provider_id: gemma-3-27b-bf16-distributed
+        model_type: llm
+      - metadata: {"embedding_dimension":2560}
+        model_id: qwen3-4b-embedding
+        provider_id: qwen-3-4b-embedding
+        model_type: embedding
+      vector_dbs: []
+      datasets: []
+      scoring_fns: []
+      benchmarks: []
+      tool_groups:
+      - toolgroup_id: builtin::websearch
+        provider_id: tavily-search
+      - toolgroup_id: builtin::rag
+        provider_id: rag-runtime
+    server:
+      port: 8321
+    telemetry:
+      enabled: true
+    vector_stores:
+      default_provider_id: pgvector
+      default_embedding_model:
+        provider_id: qwen-3-4b-embedding
+        model_id: qwen3-4b-embedding
+kind: ConfigMap
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","data":{"config.yaml":"version: 2\nimage_name: starter\napis:\n- agents\n- batches\n- datasetio\n- eval\n- files\n- inference\n- post_training\n- safety\n- scoring\n- tool_runtime\n- vector_io\nproviders:\n  inference:\n  - provider_id: gemma-3-27b-bf16-distributed\n    provider_type: remote::vllm\n    config:\n      url: http://gemma-3-27b-bf16-distributed-predictor.vszp.svc.cluster.local:8080/v1\n      api_token: fake\n      max_tokens: 4096\n      tls_verify: false\n  - provider_id: qwen-3-4b-embedding\n    provider_type: remote::vllm\n    config:\n      url: http://qwen3-4b-embedding-predictor.vszp.svc.cluster.local:8080/v1\n      api_token: fake\n      max_tokens: 4096\n      tls_verify: false\n  - provider_id: sentence-transformers\n    provider_type: inline::sentence-transformers\n  vector_io:\n  - provider_id: pgvector\n    provider_type: remote::pgvector\n    config:\n      host: ${env.POSTGRES_HOST:=pgvector}\n      port: ${env.POSTGRES_PORT:=5432}\n      db: ${env.POSTGRES_DBNAME:=rag_blueprint}\n      user: ${env.POSTGRES_USER:=postgres}\n      password: ${env.POSTGRES_PASSWORD:=rag_password}\n      persistence:\n        backend: kv_default\n        namespace: vector_io::pgvector\n  files:\n  - provider_id: meta-reference-files\n    provider_type: inline::localfs\n    config:\n      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/starter/files}\n      metadata_store:\n        table_name: files_metadata\n        backend: sql_default\n  safety:\n  - provider_id: llama-guard\n    provider_type: inline::llama-guard\n    config:\n      excluded_categories: []\n  agents:\n  - config:\n      persistence:\n        agent_state:\n          backend: kv_default\n          namespace: agents\n        responses:\n          backend: sql_default\n          max_write_queue_size: 10000\n          num_writers: 4\n          table_name: responses\n    provider_id: meta-reference\n    provider_type: inline::meta-reference\n  post_training:\n  - provider_id: torchtune-cpu\n    provider_type: inline::torchtune-cpu\n    config:\n      checkpoint_format: meta\n  eval:\n  - provider_id: meta-reference\n    provider_type: inline::meta-reference\n    config:\n      kvstore:\n        namespace: eval\n        backend: kv_default\n  datasetio:\n  - provider_id: huggingface\n    provider_type: remote::huggingface\n    config:\n      kvstore:\n        namespace: datasetio::huggingface\n        backend: kv_default\n  - provider_id: localfs\n    provider_type: inline::localfs\n    config:\n      kvstore:\n        namespace: datasetio::localfs\n        backend: kv_default\n  scoring:\n  - provider_id: basic\n    provider_type: inline::basic\n  - provider_id: llm-as-judge\n    provider_type: inline::llm-as-judge\n  - provider_id: braintrust\n    provider_type: inline::braintrust\n    config:\n      openai_api_key: ${env.OPENAI_API_KEY:=}\n  tool_runtime:\n  - provider_id: brave-search\n    provider_type: remote::brave-search\n    config:\n      api_key: ${env.BRAVE_SEARCH_API_KEY:=}\n      max_results: 3\n  - provider_id: tavily-search\n    provider_type: remote::tavily-search\n    config:\n      api_key: ${env.TAVILY_SEARCH_API_KEY:=}\n      max_results: 3\n  - provider_id: rag-runtime\n    provider_type: inline::rag-runtime\n  - provider_id: model-context-protocol\n    provider_type: remote::model-context-protocol\n  batches:\n  - provider_id: reference\n    provider_type: inline::reference\n    config:\n      kvstore:\n        namespace: batches\n        backend: kv_default\nstorage:\n  backends:\n    kv_default:\n      type: kv_sqlite\n      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/kvstore.db\n    sql_default:\n      type: sql_sqlite\n      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/sql_store.db\n  stores:\n    metadata:\n      namespace: registry\n      backend: kv_default\n    inference:\n      table_name: inference_store\n      backend: sql_default\n      max_write_queue_size: 10000\n      num_writers: 4\n    conversations:\n      table_name: openai_conversations\n      backend: sql_default\nregistered_resources:\n  models:\n  - metadata: {}\n    model_id: Gemma-3-27B-BF16-Distributed\n    provider_id: gemma-3-27b-bf16-distributed\n    model_type: llm\n  - metadata: {\"embedding_dimension\":2560}\n    model_id: qwen3-4b-embedding\n    provider_id: qwen-3-4b-embedding\n    model_type: embedding\n  vector_dbs: []\n  datasets: []\n  scoring_fns: []\n  benchmarks: []\n  tool_groups:\n  - toolgroup_id: builtin::websearch\n    provider_id: tavily-search\n  - toolgroup_id: builtin::rag\n    provider_id: rag-runtime\nserver:\n  port: 8321\ntelemetry:\n  enabled: true\nvector_stores:\n  default_provider_id: pgvector\n  default_embedding_model:\n    provider_id: qwen-3-4b-embedding\n    model_id: qwen3-4b-embedding\n"},"kind":"ConfigMap","metadata":{"annotations":{},"creationTimestamp":null,"name":"run-config","namespace":"llama-stack-rag"}}
+  creationTimestamp: "2026-02-19T15:59:42Z"
+  name: run-config
+  namespace: llama-stack-rag
+  resourceVersion: "14036075"
+  uid: 0bc70946-1642-43b0-bb6d-01676a534367
