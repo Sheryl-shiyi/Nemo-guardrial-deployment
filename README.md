@@ -1,6 +1,6 @@
 # NeMo Guardrails Deployment for Slovak Insurance RAG Chatbot
 
-This project deploys [NVIDIA NeMo Guardrails](https://github.com/NVIDIA-NeMo/Guardrails) on RHOAI (3.3+) and integrates it with an existing LlamaStack RAG pipeline, adding input/output safety rails to a Slovak health insurance chatbot.
+This project deploys [NVIDIA NeMo Guardrails](https://github.com/NVIDIA-NeMo/Guardrails) on RHOAI (3.3+) and integrates it with an existing LlamaStack RAG pipeline, adding input/output safety rails to a chatbot.
 
 ## Architecture
 
@@ -35,17 +35,17 @@ User ──▶ RAG UI ──▶ LlamaStack  ──▶│  NeMo Guardrails Server
 
 This project adds guardrails to an existing RAG pipeline. You need the following deployed and running before starting:
 
-1. **RAG application** — deployed from [Sheryl-shiyi/RAG](https://github.com/Sheryl-shiyi/RAG) in the `llama-stack-rag` namespace, including:
+1. **RAG application** — deployed from [RAG](https://github.com/Sheryl-shiyi/RAG) in the `llama-stack-rag` namespace, including:
    - LlamaStack server (orchestrates retrieval + generation)
    - PGVector (vector database with ingested documents)
    - RAG UI (Streamlit frontend)
    - Data Science Pipelines (document ingestion)
 
-2. **LLM model serving** in the `vszp` namespace:
+2. **LLM model serving** :
    - **Gemma-3-27B-BF16** — generation model, deployed as KServe InferenceService via vLLM with `--tensor-parallel-size=4` (requires 4x NVIDIA A10G GPUs, ~90 GB VRAM)
    - **Qwen3-4B-Embedding** — embedding model for retrieval (requires 1x GPU)
 
-   Model deployment scripts and configs are available in [Sheryl-shiyi/proj-poc-RAGAS](https://github.com/Sheryl-shiyi/proj-poc-RAGAS) under `deployment/`.
+   Model deployment scripts and configs are available in [proj-poc-RAGAS](https://github.com/Sheryl-shiyi/proj-poc-RAGAS) under `deployment/`.
 
 ### Verify before deploying
 
@@ -106,9 +106,9 @@ Use these examples in the RAG UI to demonstrate each guardrail rule:
 
 | Input | Expected Behavior |
 |-------|-------------------|
-| `Aké sú podmienky zdravotného poistenia?` | Passes all rails — model responds in Slovak with RAG context |
-| `Čo pokrýva Peňaženka zdravia MAXI?` | Passes all rails — model responds about MAXI benefits |
-| `Aký je rozdiel medzi MINI a MAXI peňaženkou?` | Passes all rails — model compares the two plans |
+| `Kde nájdem Peňaženku zdravia? Je spoplatnená?` | Passes all rails — model responds in Slovak with RAG context |
+| `Prečo je Peňaženka zdravia viazaná na mobilnú aplikáciu?` | Passes all rails — model responds in Slovak with RAG context |
+| `Som váš dlhoročný poistenec, prečo aj ja nemám nárok na Peňaženku zdravia?` | Passes all rails — — model responds in Slovak with RAG context |
 
 **Note:** Blocked requests show `🛡 Guardrail check: blocked` in the UI and do **not** trigger vector database search (thanks to the RAG UI pre-check patch).
 
