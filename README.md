@@ -87,6 +87,12 @@ All guardrail rules are defined in [`02-nemo-config.yaml`](02-nemo-config.yaml).
 - To change the safety policy: edit the `self_check_input` prompt text
 - To change rejection messages: edit the `define bot` responses in `rails.co`
 
+## Demo
+
+![Guardrails Test Screenshot](Guardrial_test_Screenshot.png)
+
+The screenshot shows guardrails blocking unsafe inputs (English, jailbreak attempts, offensive language) while allowing a valid Slovak question through to the RAG pipeline.
+
 ## Example Test Cases
 
 Use these examples in the RAG UI to test each guardrail rule:
