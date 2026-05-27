@@ -68,11 +68,18 @@ oc rollout restart deployment/llamastack -n llama-stack-rag
 oc rollout status deployment/llamastack -n llama-stack-rag --timeout=180s || true
 echo ""
 
-echo "=== Step 10: Patch RAG UI with guardrails pre-check ==="
+echo "=== Step 10: Patch RAG UI (guardrails pre-check + Slovak greeting) ==="
 oc create configmap rag-ui-overrides \
   --from-file=direct.py="$SCRIPT_DIR/rag-ui-patch/direct_patched.py" \
   --from-file=agent.py="$SCRIPT_DIR/rag-ui-patch/agent_original.py" \
+  --from-file=chat.py="$SCRIPT_DIR/rag-ui-patch/chat_patched.py" \
   -n llama-stack-rag --dry-run=client -o yaml | oc apply -f -
+
+# Ensure chat.py mount exists
+oc get deployment rag -n llama-stack-rag -o jsonpath='{.spec.template.spec.containers[0].volumeMounts}' | grep -q chat.py || \
+oc patch deployment rag -n llama-stack-rag --type=json -p='[
+  {"op": "add", "path": "/spec/template/spec/containers/0/volumeMounts/-", "value": {"name": "rag-ui-overrides", "mountPath": "/app/llama_stack_ui/distribution/ui/page/playground/chat.py", "subPath": "chat.py"}}
+]'
 echo ""
 
 echo "=== Step 11: Restart RAG UI ==="

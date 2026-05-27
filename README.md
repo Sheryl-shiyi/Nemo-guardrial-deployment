@@ -185,7 +185,7 @@ Restores LlamaStack to connect directly to Gemma-3-27B, then deletes all NeMo Gu
 
 ## Configuration Notes
 
-**System prompt** is set in `02-nemo-config.yaml` under `instructions`. NeMo overrides any system prompt sent from the frontend — this is by design to prevent prompt injection that could bypass guardrails.
+**System prompt** is set in `02-nemo-config.yaml` under `instructions`. NeMo overrides any system prompt sent from the frontend — this is by design to prevent prompt injection that could bypass guardrails. The System Prompt input field has been removed from the RAG UI sidebar (`rag-ui-patch/chat_patched.py`, `render_sidebar_configuration()`) to avoid confusion, since the frontend value would be ignored by NeMo anyway.
 
 **Streaming** is enabled (`rails.output.streaming.enabled: true`). NeMo buffers the full response, runs output rails, then streams it to the client.
 
