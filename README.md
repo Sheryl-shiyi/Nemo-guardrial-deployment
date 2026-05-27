@@ -1,24 +1,29 @@
-# NeMo Guardrails Deployment for Slovak Insurance RAG Chatbot
+# NeMo Guardrails Deployment for a RAG-based Chatbot
 
 This project deploys [NVIDIA NeMo Guardrails](https://github.com/NVIDIA-NeMo/Guardrails) on RHOAI (3.3+) and integrates it with an existing LlamaStack RAG pipeline, adding input/output safety rails to a chatbot.
 
 ## Architecture
 
 ```
-                              nemo-guardrails namespace
-                            ┌──────────────────────────────┐
-User ──▶ RAG UI ──▶ LlamaStack  ──▶│  NeMo Guardrails Server      │──▶ Gemma-3-27B (vszp)
-         (8501)      (8321)    │    │                              │     (vLLM, 4x A10G)
-                     │         │    │  Input Rails:                │
-                     │         │    │    1. Forbidden words  ~10ms │
-                     │         │    │    2. Language check   ~5ms  │
-                     │         │    │    3. Self check input ~0.2s │
-                     │         │    │                              │
-                     │         │    │  Output Rails:               │
-                     │         │    │    1. Self check output ~1.5s│
-         PGVector ◀──┘         │    └──────────────────────────────┘
-         (vector DB)           │
-                         llama-stack-rag namespace
+User ──▶ RAG UI ──▶ LlamaStack ──▶ NeMo Guardrails ──▶ Gemma-3-27B
+         (8501)      (8321)         (nemo-guardrails     (vszp namespace)
+           │                         namespace)
+           │                        ┌────────────────┐
+           │                        │ Input Rails:   │
+           │                        │  1. Forbidden  │
+           │                        │     words      │
+           │                        │  2. Language   │
+           │                        │     check      │
+           │                        │  3. Self check │
+           │                        │     input      │
+           │                        │                │
+           │                        │ Output Rails:  │
+           │                        │  1. Self check │
+           │                        │     output     │
+           │                        └────────────────┘
+         PGVector
+       (vector DB,
+    llama-stack-rag namespace)
 ```
 
 **Key design**: NeMo Guardrails sits between LlamaStack and the vLLM model as a transparent proxy. LlamaStack's only config change is the inference URL — from vLLM directly to the NeMo service.
@@ -42,8 +47,8 @@ This project adds guardrails to an existing RAG pipeline. You need the following
    - Data Science Pipelines (document ingestion)
 
 2. **LLM model serving** :
-   - **Gemma-3-27B-BF16** — generation model, deployed as KServe InferenceService via vLLM with `--tensor-parallel-size=4` (requires 4x NVIDIA A10G GPUs, ~90 GB VRAM)
-   - **Qwen3-4B-Embedding** — embedding model for retrieval (requires 1x GPU)
+   - **Gemma-3-27B-BF16** — generation model, deployed as KServe InferenceService via vLLM with `--tensor-parallel-size=4` 
+   - **Qwen3-4B-Embedding** — embedding model for retrieval 
 
    Model deployment scripts and configs are available in [proj-poc-RAGAS](https://github.com/Sheryl-shiyi/proj-poc-RAGAS) under `deployment/`.
 
@@ -66,18 +71,25 @@ oc get crd | grep nemo
 
 ## Guardrail Rules
 
-| Rail | Type | Mechanism | Latency |
-|------|------|-----------|---------|
-| Forbidden words | Input | Custom Python action (regex match) | ~10ms |
-| Slovak language only | Input | FastText language detection (`lid.176.ftz`, auto-downloaded on first request) | ~5ms |
-| Content safety / jailbreak | Input | LLM judge via `self check input` (Gemma-3-27B) | ~0.2s |
-| Output safety | Output | LLM judge via `self check output` (Gemma-3-27B) | ~1.5s |
+All guardrail rules are defined in [`02-nemo-config.yaml`](02-nemo-config.yaml). This single ConfigMap contains three files that the NeMo Guardrails server loads at startup:
 
-Self-contained rails (forbidden words, language) run first. Only if they pass, the LLM-dependent self-check runs. This minimizes unnecessary LLM calls.
+| Rail | Type | Defined in | Implementation | Latency |
+|------|------|-----------|----------------|---------|
+| Forbidden words | Input | `actions.py` → `check_forbidden_words()` | Custom Python action — checks user message against a hardcoded word list (`hack`, `exploit`, `violence`, `illegal`) | ~10ms |
+| Slovak language only | Input | `actions.py` → `check_language()` | Custom Python action — uses FastText (`lid.176.ftz`, auto-downloaded) to detect input language, allows Slovak and Czech (these two are frequently confused by the detector) | ~5ms |
+| Content safety / jailbreak | Input | `config.yaml` → `prompts[task: self_check_input]` | Built-in NeMo flow — sends the user message to Gemma-3-27B with a policy prompt, LLM responds Yes (block) or No (allow) | ~0.2s |
+| Output safety | Output | `config.yaml` → `prompts[task: self_check_output]` | Built-in NeMo flow — sends the model's response to Gemma-3-27B with a policy prompt, LLM responds Yes (block) or No (allow) | ~1.5s |
 
-## Demo Test Cases
+**Execution order**: Self-contained rails (forbidden words, language) run first. Only if they pass, the LLM-dependent self-check runs. This is controlled by the flow order in `config.yaml` → `rails.input.flows`. The Colang flow definitions in `rails.co` define what happens when a rail blocks (e.g., which Slovak rejection message to show).
 
-Use these examples in the RAG UI to demonstrate each guardrail rule:
+**To customize**: edit the relevant section in `02-nemo-config.yaml`, then `oc apply` and restart the NeMo pod. For example:
+- To add forbidden words: edit the `FORBIDDEN_WORDS` list in `check_forbidden_words()`
+- To change the safety policy: edit the `self_check_input` prompt text
+- To change rejection messages: edit the `define bot` responses in `rails.co`
+
+## Example Test Cases
+
+Use these examples in the RAG UI to test each guardrail rule:
 
 ### Forbidden Words (Input Rail)
 
@@ -108,13 +120,13 @@ Use these examples in the RAG UI to demonstrate each guardrail rule:
 |-------|-------------------|
 | `Kde nájdem Peňaženku zdravia? Je spoplatnená?` | Passes all rails — model responds in Slovak with RAG context |
 | `Prečo je Peňaženka zdravia viazaná na mobilnú aplikáciu?` | Passes all rails — model responds in Slovak with RAG context |
-| `Som váš dlhoročný poistenec, prečo aj ja nemám nárok na Peňaženku zdravia?` | Passes all rails — — model responds in Slovak with RAG context |
+| `Som váš dlhoročný poistenec, prečo aj ja nemám nárok na Peňaženku zdravia?` | Passes all rails — model responds in Slovak with RAG context |
 
 **Note:** Blocked requests show `🛡 Guardrail check: blocked` in the UI and do **not** trigger vector database search (thanks to the RAG UI pre-check patch).
 
 ## RAG UI Pre-check
 
-The RAG UI (`direct_patched.py`) includes a guardrails pre-check that runs **before** vector search. Without this patch, blocked requests would still trigger a vector DB query (harmless but poor demo optics).
+The RAG UI ([`rag-ui-patch/direct_patched.py`](rag-ui-patch/direct_patched.py)) includes a guardrails pre-check that runs **before** vector search. Without this patch, blocked requests would still trigger a vector DB query (harmless but poor demo optics).
 
 ```
 With pre-check:                     Without pre-check:
@@ -130,6 +142,8 @@ NeMo /v1/chat/completions           Model response
   ↓
 Model response
 ```
+
+The pre-check logic is in the `guardrail_pre_check()` function at the top of `direct_patched.py`.
 
 ## File Reference
 
@@ -178,3 +192,5 @@ Restores LlamaStack to connect directly to Gemma-3-27B, then deletes all NeMo Gu
 **Route timeout** is set to 300s via HAProxy annotation. The AWS ELB in front has a fixed 60s idle timeout that cannot be changed via route config — this only affects external access via the route, not internal cluster communication.
 
 **Language detection model** (`lid.176.ftz`, ~2MB) is downloaded from Facebook Research on the first request and cached in `/tmp` within the NeMo pod. On pod restart it re-downloads automatically.
+
+**Short text bypass**: Very short inputs (e.g., "hi", "ok") may pass the language check because FastText cannot reliably detect language from only a few characters. This is by design — blocking ambiguous short text would cause too many false positives on valid Slovak input. The model's system prompt ensures responses are always in Slovak regardless of input language.
