@@ -122,14 +122,12 @@ data:
     @action(is_system_action=True)
     async def check_language(context: Optional[dict] = None) -> str:
         user_message = context.get("user_message", "").strip()
-        if len(user_message.split()) < 3:
-            return "allowed"
         try:
             model = _get_fasttext_model()
             predictions = model.predict(user_message.replace("\n", " "))
             detected_lang = predictions[0][0].replace("__label__", "")
             confidence = predictions[1][0]
-            if detected_lang == "sk" or confidence < 0.5:
+            if detected_lang in ("sk", "cs") or confidence < 0.5:
                 return "allowed"
             return "blocked"
         except Exception:
