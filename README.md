@@ -2,6 +2,8 @@
 
 This project deploys [NVIDIA NeMo Guardrails](https://github.com/NVIDIA-NeMo/Guardrails) on RHOAI (3.3+) and integrates it with an existing LlamaStack RAG pipeline, adding input/output safety rails to a chatbot.
 
+**Slides:** [Retrieval, Rails, Results](https://sheryl-shiyi.github.io/Sheryl-Slides/retrieval-rails-results.html) — how these rails fit into the wider RAG build, as a presentation.
+
 ## Architecture
 
 ```
